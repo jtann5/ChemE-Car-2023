@@ -1,6 +1,7 @@
 String version = "Phast v1.0.2";
 String company = "ItWorks LLC";
 
+#include<Wire.h>
 #include <LiquidCrystal.h>
 
 // Reaction settings
@@ -144,6 +145,8 @@ void loop() {
       info();
       break;
     default:
+      refreshDisplay("Critical Error", "Restarting System");
+      delay(1000);
       sysReset();
   }
 }
