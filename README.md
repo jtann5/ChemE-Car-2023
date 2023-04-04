@@ -1,20 +1,20 @@
 # ChemE-Car-2023
+This project includes the code necessary to operate the MSU ChemE Car for the Spring 2023 ChemE Car competition.
 
-This project includes the code necessary to operate the 2023 MSU ChemE Car.
+## General Information
+ECU - Electronic Control Unit
+Controls the overall functions of the car and allows for user interaction through the GUI. Responsible for regulating the start reaction (lead-acid battery) and acting upon the stop reaction (luminol reaction).
 
 BCM - Body Control Module 
-Operates the controls for the soleniod and the motors.
+Receives instructions from the ECU and controls the soleniod and the relay in the manner specified.
 
-ECU - Electronic Control Unit
-Operates the functions of the GUI, and the total operations of the car. Also controls the luminol reaction with the sensor that determines the luminesense of the chemical reaction. 
+## Team Members
+Eli - Chemical Engineering
 
-The BCM is a secondary arduino that communicates with the primary arduino ECU.
+Christy - Chemical Engineering
 
-All Team Members who contributed to car:
-- Eli ** (Chem Eng)
-- Christy ** (Chem Eng)
-- Mackenzie ** (Chem Eng)
-- Jacob ** (Comp Sci)
-- Mike ** (Comp Sci)
+Mackenzie - Chemical Engineering
 
-** used to protect individual identity.
+Jacob - Computer Science
+
+Mike - Computer Science
