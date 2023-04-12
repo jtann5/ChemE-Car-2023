@@ -8,7 +8,7 @@ void setup() {
   delay(2000);
   count = 1;
   //time limit in seconds
-  time_limit = 90.1;
+  time_limit = 90000.1;
   count_f = 0;
   max_value = 0;
   char t[60];
@@ -17,7 +17,7 @@ void setup() {
 }
 
 void loop() {
-  int analogValue = analogRead(A0);
+  int analogValue = analogRead(A3);
   if(analogValue > max_value){
     max_value = analogValue;
   }

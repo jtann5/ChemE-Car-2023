@@ -1,28 +1,27 @@
-String version = "Phast v1.0.2";
-String company = "ItWorks LLC";
+double time;
 
-#include<Wire.h>
-#include <LiquidCrystal.h>
+String version = "Phast v1.1.1";
+String company = "TanrTech";
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
 
 // Reaction settings
-int reactionBaseline = 500;
-int stopValue = 100;
+int reactionBaseline = 100;
+int stopValue = 15;
 
 // Pin setup
 int xPin = A0;
 int yPin = A1;
 int buttonPin = A2;
-const int rs = 7, e = 6, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-int Rled = 9;
-int Gled = 10;
-int Bled = 11;
 int photoPin = A3;
-int relayPin = A4;
-int valvePin = A5;
+// A4 and A5 reserved for I2C LCD
+int Rx = 12;
+int Tx = 13;
 
 // Display settings, variables, and characters
-LiquidCrystal lcd(rs, e, d4, d5, d6, d7);
-bool updateDisplay = true;
+LiquidCrystal_I2C lcd(0x27,16,2);
 byte copyrightChar[8] = {B11111,B10001,B10101,B10111,B10101,B10001,B11111,B00000};
 byte blockChar[8] = {B11111,B11111,B11111,B11111,B11111,B11111,B11111,B11111};
 
@@ -54,41 +53,52 @@ String options[] = {"Reaction Center", "Relay Control", "Valve Control", "Reset"
 // Sensor settings and variables
 int sensorValue = 0;
 
-// State booleans
+// Reaction state booleans
 bool reacting = false;
 bool manualStop = false;
 bool reactionComplete = false;
 bool baselineReached = false;
+
+// for delays
 unsigned long prev = 0UL;
 unsigned long prev2 = 0UL;
+
+// State of relay and valve
+bool relayOn = false;
+bool valveOpen = false;
+
+// Link to BCM
+SoftwareSerial link(Rx, Tx);
+char cString[20];
+byte chPos = 0;
+byte ch = 0;
 
 void(* sysReset) (void) = 0;
 
 void setup() {
-  // Joystick setup
+  Serial.begin(9600);   
+
+  // Initialize joystick
   pinMode(buttonPin, INPUT);
   digitalWrite(buttonPin, HIGH);
   pinMode(xPin, INPUT);
   pinMode(yPin, INPUT);
 
+  // Initialize sensor
   pinMode(photoPin, INPUT);
 
-  pinMode(relayPin, OUTPUT);
-  digitalWrite(relayPin, LOW);
-  pinMode(valvePin, OUTPUT);
-  digitalWrite(valvePin, LOW);
+  // Initialize link to BCM
+  pinMode(Rx, INPUT);
+  pinMode(Tx, OUTPUT);
+  link.begin(9600);
 
-  lcd.begin(16, 2);
+  // Initialize LCD
+  lcd.init();
+  lcd.backlight();
   lcd.createChar(1, copyrightChar);
   lcd.createChar(2, blockChar);
 
-  // RGB led setup
-  pinMode(Rled, OUTPUT);
-  pinMode(Gled, OUTPUT);
-  pinMode(Bled, OUTPUT);
-
-  Serial.begin(9600);
-
+  // Startup actions
   lcd.clear();
   lcd.print("Starting up...");
   for (int i = 0; i < 3; i++) {
@@ -97,6 +107,9 @@ void setup() {
     ledOFF();
     delay(100);
   }
+
+  if (strcmp(sendBCM("SYN").c_str(), version.c_str()) != 0) error("BCM ERROR", "Improper Config.");
+  
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print(version);
@@ -104,8 +117,8 @@ void setup() {
   lcd.write(1);
   lcd.print(company);
   delay(2000);
+  lcd.clear();
 
-  // lcd.clear();
   // lcd.print("Hello! We're");
   // lcd.setCursor(0,1);
   // lcd.print("glad you're here");
@@ -120,8 +133,7 @@ void setup() {
   // lcd.setCursor(0,1);
   // lcd.print("take long");
   // delay(6000);
-  lcd.clear();
-  ledOFF();
+  //lcd.clear();
 }
 
 void loop() {
@@ -145,9 +157,7 @@ void loop() {
       info();
       break;
     default:
-      refreshDisplay("Critical Error", "Restarting System");
-      delay(1000);
-      sysReset();
+      error("UI ERROR", "Unknown element");
   }
 }
 
@@ -196,17 +206,20 @@ void reaction() {
   unsigned long curr = millis();
   if (curr - prev >= 250UL) { 
     prev = curr; 
-    sensorValue = analogRead(photoPin);
     if (reacting) {
       refreshDisplay("Status: REACTING", "sensorValue: "+String(sensorValue));
       ledBLUE();
+
+      // added for testing
+      time += 0.25;
+      Serial.println((String) time + ", " + sensorValue);
     } else if (manualStop) {
       refreshDisplay("Status: STOPPED", "sensorValue: "+String(sensorValue));
       ledRED();
     } else if (reactionComplete) {
       refreshDisplay("Status: COMPLETE", "sensorValue: "+String(sensorValue));
       ledGREEN();
-    } else if (digitalRead(relayPin) == HIGH) {
+    } else if (relayOn) {
       refreshDisplay("Status:NOT READY", "sensorValue: "+String(sensorValue));
       if (curr - prev2 >= 750UL) {
         ledRED();
@@ -224,8 +237,6 @@ void reaction() {
       }
     }
   }
-  // Status: STOPPED, READY, REACTING, NOT READY, COMPLETED
-  // sensorValue: XXXX
 
   // Check status of reaction and act accordingly
   if (reacting) {
@@ -251,7 +262,7 @@ void reaction() {
       baselineReached = false;
       relayOFF();
       valveCLOSE();
-    } else if (digitalRead(relayPin) == HIGH) {
+    } else if (relayOn) {
       relayOFF();
       valveCLOSE();
     } else {
@@ -259,6 +270,11 @@ void reaction() {
       manualStop = false;
       relayON();
       valveOPEN();
+      
+      // added for testing
+      time = 0.0;
+      prev = millis();
+      Serial.println("Time, SensorValue");
     }
   } else if (in == LEFT && !reacting) {
     manualStop = false;
@@ -269,7 +285,7 @@ void reaction() {
 
 void relay() {
   // Update display and led
-  if (digitalRead(relayPin) == HIGH) {
+  if (relayOn) {
     refreshDisplay("Relay Controller", "Relay: ON");
     ledGREEN();
   } else {
@@ -280,7 +296,7 @@ void relay() {
   // Get and act upon user input
   int in = input();
   if (in == PRESS) {
-    if (digitalRead(relayPin) == HIGH) {
+    if (relayOn) {
       relayOFF();
     } else {
       relayON();
@@ -292,7 +308,7 @@ void relay() {
 
 void valve() {
   // Update display and led
-  if (digitalRead(relayPin) == HIGH) {
+  if (valveOpen) {
     refreshDisplay("Valve Controller", "Valve: OPEN");
     ledGREEN();
   } else {
@@ -303,10 +319,10 @@ void valve() {
   // Get and act upon user input
   int in = input();
   if (in == PRESS) {
-    if (digitalRead(relayPin) == HIGH) {
-      relayOFF();
+    if (valveOpen) {
+      valveCLOSE();
     } else {
-      relayON();
+      valveOPEN();
     }
   } else if (in == LEFT) {
     currUI = MENU;
@@ -322,7 +338,6 @@ void reset() {
   int in = input();
   if (in == PRESS) {
     lcd.setCursor(0,1);
-    analogWrite(Gled, 0);
     for (int i = 0; i < 16; i++) {
       in = input();
       if (in == !UNRELEASED) break;
@@ -334,6 +349,7 @@ void reset() {
         ledRED();
       }
       if (i == 15) {
+        sendBCM("RST");
         ledOFF();
         lcd.clear();
         delay(500);
@@ -354,6 +370,14 @@ void info() {
   int in = input();
   if (in == LEFT) {
     currUI = MENU;
+  }
+}
+
+void error(String line1, String line2) {
+  while (true) {
+    refreshDisplay(line1, line2);
+    int in = input();
+    if (in == PRESS) sysReset();
   }
 }
 
@@ -410,38 +434,52 @@ void refreshDisplay(String in1, String in2) {
 }
 
 void relayON() {
-  digitalWrite(relayPin, HIGH);
+  if (strcmp(sendBCM("Ron").c_str(), "ACK") == 0) relayOn = true;
 }
 
 void relayOFF() {
-  digitalWrite(relayPin, LOW);
+  if (strcmp(sendBCM("Roff").c_str(), "ACK") == 0) relayOn = false;
 }
 
 void valveOPEN() {
-  digitalWrite(valvePin, HIGH);
+  if (strcmp(sendBCM("Vopen").c_str(), "ACK") == 0) valveOpen = true;
 }
 
 void valveCLOSE() {
-  digitalWrite(valvePin, LOW);
+  if (strcmp(sendBCM("Vclose").c_str(), "ACK") == 0) valveOpen = false;
 }
 
 void ledRED() {
-  analogWrite(Rled, 200);
-  analogWrite(Gled, 0);
-  analogWrite(Bled, 0);
+  sendBCM("Lred");
 }
 void ledGREEN() {
-  analogWrite(Rled, 0);
-  analogWrite(Gled, 50);
-  analogWrite(Bled, 0);
+  sendBCM("Lgreen");
 }
 void ledBLUE() {
-  analogWrite(Rled, 0);
-  analogWrite(Gled, 0);
-  analogWrite(Bled, 50);
+  sendBCM("Lblue");
 }
 void ledOFF() {
-  analogWrite(Rled, 0);
-  analogWrite(Gled, 0);
-  analogWrite(Bled, 0);
+  sendBCM("Loff");
+}
+
+String sendBCM(String send) {
+  prev = millis();
+  while (true) {
+    unsigned long curr = millis();
+    // Sends message every 250ms and times out at 1000ms
+    if (curr - prev >= 1000UL) {
+      error("BCM ERROR", "No response");
+    } else if ((curr-prev)%250UL == 0){
+      link.print(send);
+    }
+    while(link.available() > 0) {
+      ch = link.read();
+      cString[chPos] = ch;
+      chPos++;
+      delay(1);
+    }
+    cString[chPos] = 0; //terminate cString
+    chPos = 0;
+    if (strcmp(cString, "") != 0) return cString; // returns if string is not empty
+  }
 }
