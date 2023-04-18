@@ -1,18 +1,20 @@
-String version = "Phast v1.1.1";
-String company = "TanrTech";
+String const version = "Phast v1.1.3";
+String const company = "TanrTech";
 
 #include <AFMotor.h>
 #include <SoftwareSerial.h>
 
 // Pin setup
-int relayPin = A0;
-int Rled = A1;
-int Gled = A2;
-int Bled = A3;
-int Rx = A4;
-int Tx = A5;
+int const relayPin = A0;
+int const Rled = A1;
+int const Gled = A2;
+int const Bled = A3;
+int const Rx = A4;
+int const Tx = A5;
 
-AF_DCMotor valve(3);
+AF_DCMotor valve(4);
+#define OPEN BACKWARD
+#define CLOSE FORWARD
 
 // Link to ECU
 SoftwareSerial link(Rx, Tx);
@@ -99,13 +101,13 @@ void relayON() {
 }
 
 void valveCLOSE() {
-  valve.run(BACKWARD);
+  valve.run(CLOSE);
   delay(30);
   valve.run(RELEASE);
 }
 
 void valveOPEN() {
-  valve.run(FORWARD);
+  valve.run(OPEN);
   delay(30);
   valve.run(RELEASE);
 }

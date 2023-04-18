@@ -1,24 +1,24 @@
 double time;
 
-String version = "Phast v1.1.1";
-String company = "TanrTech";
+String const version = "Phast v1.1.3";
+String const company = "TanrTech";
 
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <SoftwareSerial.h>
 
 // Reaction settings
-int reactionBaseline = 100;
-int stopValue = 15;
+int const reactionBaseline = 20;
+int const stopValue = 5;
 
 // Pin setup
-int xPin = A0;
-int yPin = A1;
-int buttonPin = A2;
-int photoPin = A3;
+int const xPin = A0;
+int const yPin = A1;
+int const buttonPin = A2;
+int const photoPin = A3;
 // A4 and A5 reserved for I2C LCD
-int Rx = 12;
-int Tx = 13;
+int const Rx = 12;
+int const Tx = 13;
 
 // Display settings, variables, and characters
 LiquidCrystal_I2C lcd(0x27,16,2);
@@ -26,29 +26,18 @@ byte copyrightChar[8] = {B11111,B10001,B10101,B10111,B10101,B10001,B11111,B00000
 byte blockChar[8] = {B11111,B11111,B11111,B11111,B11111,B11111,B11111,B11111};
 
 // User input settings and variables
-#define NONE 0
-#define PRESS 1
-#define LEFT 2
-#define RIGHT 3
-#define UP 4
-#define DOWN 5
-#define UNRELEASED 6
+enum joystick {NONE, PRESS, LEFT, RIGHT, UP, DOWN, UNRELEASED};
 bool released = true;
-int dist = 250;
+int const dist = 100;
 
 // UI settings and variables
-#define MENU -1
-#define REACTION 0
-#define RELAY 1
-#define VALVE 2
-#define RESET 3
-#define INFO 4
+enum ui {MENU=-1, REACTION, RELAY, VALVE, RESET, INFO};
 int currUI = MENU;
 bool arrowPos = true; // True: arrow on top False: arrow on bottom
 int selection = REACTION;
-int minS = REACTION;
-int maxS = INFO;
-String options[] = {"Reaction Center", "Relay Control", "Valve Control", "Reset", "Info"};
+int const minS = REACTION;
+int const maxS = INFO;
+String const options[] = {"Reaction Center", "Relay Control", "Valve Control", "Reset", "Info"};
 
 // Sensor settings and variables
 int sensorValue = 0;
