@@ -1,5 +1,5 @@
-String const version = "Phast v1.1.3";
-String const company = "TanrTech";
+const char* version = "Phast v1.2.0";
+const char* company = "TanrTech";
 
 #include <AFMotor.h>
 #include <SoftwareSerial.h>
@@ -12,6 +12,7 @@ int const Bled = A3;
 int const Rx = A4;
 int const Tx = A5;
 
+// Motor controller setup
 AF_DCMotor valve(4);
 #define OPEN BACKWARD
 #define CLOSE FORWARD
@@ -58,32 +59,32 @@ void loop() {
   Serial.print(cString);
 
   if (strcmp(cString, "SYN") == 0) {
-    link.print(version.c_str());
+    link.print(version);
     relayOFF();
     valveCLOSE();
     ledOFF();
-  } else if (strcmp(cString, "Vopen") == 0) {
+  } else if (strcmp(cString, "VOP") == 0) {
     link.print("ACK");
     valveOPEN();
-  } else if (strcmp(cString, "Ron") == 0) {
+  } else if (strcmp(cString, "RON") == 0) {
     link.print("ACK");
     relayON();
-  } else if (strcmp(cString, "Vclose") == 0) {
+  } else if (strcmp(cString, "VCL") == 0) {
     link.print("ACK");
     valveCLOSE();
-  } else if (strcmp(cString, "Roff") == 0) {
+  } else if (strcmp(cString, "ROF") == 0) {
     link.print("ACK");
     relayOFF();
-  } else if (strcmp(cString, "Lred") == 0) {
+  } else if (strcmp(cString, "LRD") == 0) {
     link.print("ACK");
     ledRED();
-  } else if (strcmp(cString, "Lgreen") == 0) {
+  } else if (strcmp(cString, "LGN") == 0) {
     link.print("ACK");
     ledGREEN();
-  } else if (strcmp(cString, "Lblue") == 0) {
+  } else if (strcmp(cString, "LBL") == 0) {
     link.print("ACK");
     ledBLUE();
-  } else if (strcmp(cString, "Loff") == 0) {
+  } else if (strcmp(cString, "LOF") == 0) {
     link.print("ACK");
     ledOFF();
   } else if (strcmp(cString, "RST") == 0) {
