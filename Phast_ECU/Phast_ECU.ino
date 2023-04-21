@@ -683,5 +683,8 @@ void TakeOnMe() {
 
     // stop the waveform generation before the next note.
     noTone(buzzer);
+
+    // stop playback if joystick is pushed down
+    if (input() == DOWN) break;
   }
 }
