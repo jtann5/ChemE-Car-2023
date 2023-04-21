@@ -6,8 +6,8 @@ const char* company = "TanrTech";
 #include <SoftwareSerial.h>
 
 // Reaction settings
-int const reactionBaseline = 20;
-int const stopValue = 5;
+int const reactionBaseline = 50;
+int const stopValue = 20;
 
 // Pin setup
 int const xPin = A0;
