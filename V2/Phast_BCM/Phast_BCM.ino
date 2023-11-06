@@ -1,4 +1,4 @@
-const char* version = "Phast v1.2.0";
+const char* version = "Phast v2.0.0";
 const char* company = "TanrTech";
 
 #include <AFMotor.h>
@@ -17,11 +17,22 @@ AF_DCMotor valve(4);
 #define OPEN BACKWARD
 #define CLOSE FORWARD
 
+// Sensor led setup
+AF_DCMotor sensorLed(3);
+#define ON BACKWARD
+#define OFF RELEASE
+
 // Link to ECU
 SoftwareSerial link(Rx, Tx);
 char cString[20];
 byte chPos = 0;
 byte ch = 0;
+
+// Commands
+struct CommandFunction {
+  const char* command;
+  void (*function)();
+};
 
 void (*sysReset)(void) = 0;
 
@@ -36,6 +47,10 @@ void setup() {
   valve.setSpeed(255);
   valveCLOSE();
 
+  // Initialize Sensor LED
+  sensorLed.setSpeed(255);
+  sensorLedOff();
+
   // Initialize LED
   pinMode(Rled, OUTPUT);
   pinMode(Gled, OUTPUT);
@@ -47,50 +62,12 @@ void setup() {
   link.begin(9600);
 }
 
-void loop() {
-  while (link.available() > 0) {
-    ch = link.read();
-    cString[chPos] = ch;
-    chPos++;
-    delay(1);
-  }
-  cString[chPos] = 0;  //terminate cString
-  chPos = 0;
-  Serial.print(cString);
-
-  if (strcmp(cString, "SYN") == 0) {
-    link.print(version);
-    relayOFF();
-    valveCLOSE();
-    ledOFF();
-  } else if (strcmp(cString, "VOP") == 0) {
-    link.print("ACK");
-    valveOPEN();
-  } else if (strcmp(cString, "RON") == 0) {
-    link.print("ACK");
-    relayON();
-  } else if (strcmp(cString, "VCL") == 0) {
-    link.print("ACK");
-    valveCLOSE();
-  } else if (strcmp(cString, "ROF") == 0) {
-    link.print("ACK");
-    relayOFF();
-  } else if (strcmp(cString, "LRD") == 0) {
-    link.print("ACK");
-    ledRED();
-  } else if (strcmp(cString, "LGN") == 0) {
-    link.print("ACK");
-    ledGREEN();
-  } else if (strcmp(cString, "LBL") == 0) {
-    link.print("ACK");
-    ledBLUE();
-  } else if (strcmp(cString, "LOF") == 0) {
-    link.print("ACK");
-    ledOFF();
-  } else if (strcmp(cString, "RST") == 0) {
-    link.print("ACK");
-    sysReset();
-  }
+// Functions for commands
+void sync() {
+  link.print(version);
+  relayOFF();
+  valveCLOSE();
+  ledOFF();
 }
 
 void relayOFF() {
@@ -132,4 +109,48 @@ void ledOFF() {
   analogWrite(Rled, 0);
   analogWrite(Gled, 0);
   analogWrite(Bled, 0);
+}
+
+void sensorLedOn() {
+  sensorLed.run(ON);
+}
+
+void sensorLedOff() {
+  sensorLed.run(OFF);
+}
+
+// Commands and the functions they call
+CommandFunction commandFunctions[] = {
+  {"SYN", sync},
+  {"VOP", valveOPEN},
+  {"RON", relayON},
+  {"VCL", valveCLOSE},
+  {"ROF", relayOFF},
+  {"LRD", ledRED},
+  {"LGN", ledGREEN},
+  {"LBL", ledBLUE},
+  {"LOF", ledOFF},
+  {"SLN", sensorLedOn},
+  {"SLF", sensorLedOff},
+  {"RST", sysReset}
+};
+
+void loop() {
+  while (link.available() > 0) {
+    ch = link.read();
+    cString[chPos] = ch;
+    chPos++;
+    delay(1);
+  }
+  cString[chPos] = 0;  //terminate cString
+  chPos = 0;
+  Serial.print(cString);
+
+  for (int i = 0; i < sizeof(commandFunctions) / sizeof(commandFunctions[0]); i++) {
+    if (strcmp(cString, commandFunctions[i].command) == 0) {
+      if (strcmp(cString, "SYN") != 0) link.print("ACK");
+      commandFunctions[i].function();
+      break;
+    }
+  }
 }

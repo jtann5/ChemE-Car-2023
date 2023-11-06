@@ -1,4 +1,4 @@
-const char* version = "Phast v1.2.0";
+const char* version = "Phast v2.0.0";
 const char* company = "TanrTech";
 
 #include <Wire.h>
@@ -66,13 +66,13 @@ void setup() {
   pinMode(Tx, OUTPUT);
   link.begin(9600);
 
-  // Initialize LCD
+  // Initialize LCD and special characters
   lcd.init();
   lcd.backlight();
   lcd.createChar(1, copyrightChar);
   lcd.createChar(2, blockChar);
 
-  // Startup UIj
+  // Startup UI Screen
   lcd.clear();
   lcd.print("Starting up...");
   for (int i = 0; i < 3; i++) {
@@ -81,9 +81,7 @@ void setup() {
     ledOFF();
     delay(100);
   }
-
   if (strcmp(sendBCM("SYN").c_str(), version) != 0) error("BCM ERROR", "Improper Config.");
-  
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print(version);
@@ -115,21 +113,24 @@ void loop() {
       info();
       break;
     default:
-      error("UI ERROR", "Unknown element");
+      currUI = MENU;
   }
 }
 
 // Functions for all UI sections
 void menu() {
-  while (true) {
-    // Update display and led
-    if (arrowPos) {
-      refreshDisplay(">"+(String)options[selection], " "+(String)options[selection+1]);
-    } else {
-      refreshDisplay(" "+(String)options[selection-1], ">"+(String)options[selection]);
-    }
+  // Update display and led
+    auto updateDisplay = [&](){
+      if (arrowPos) {
+        refreshDisplay(">"+(String)options[selection], " "+(String)options[selection+1]);
+      } else {
+        refreshDisplay(" "+(String)options[selection-1], ">"+(String)options[selection]);
+      }
+    };
+    updateDisplay();
     ledOFF();
 
+  while (true) {
     // Get and act upon user input
     int in = input();
     if (in == PRESS) {
@@ -146,6 +147,7 @@ void menu() {
         selection--;
         arrowPos = true;
       }
+      updateDisplay();
     } else if (in == DOWN) {
       if (selection == maxS) { // end of menu
         lcd.setCursor(0,1);
@@ -157,6 +159,7 @@ void menu() {
       } else {
         selection++;
       }
+      updateDisplay();
     }
   }
 }
@@ -226,13 +229,13 @@ void reaction() {
     // Check status of reaction and act accordingly
     if (reacting) {
       if (baselineReached) {
-        if (sensorValue <= stopValue) {
-          relayOFF();
-          valveCLOSE();
-          reacting = false;
-          reactionComplete = true;
-          baselineReached = false;
-        }
+        // if (sensorValue <= stopValue) {
+        //   relayOFF();
+        //   valveCLOSE();
+        //   reacting = false;
+        //   reactionComplete = true;
+        //   baselineReached = false;
+        // }
       } else {
         if (sensorValue >= reactionBaseline) baselineReached = true;
       }
@@ -247,14 +250,17 @@ void reaction() {
         baselineReached = false;
         relayOFF();
         valveCLOSE();
+        sensorLedOff();
       } else if (relayOn) {
         relayOFF();
         valveCLOSE();
+        sensorLedOff();
       } else {
         reacting = true;
         manualStop = false;
         relayON();
         valveOPEN();
+        sensorLedOn();
         
         // added for testing
         time = 0.0;
@@ -305,8 +311,8 @@ int median(int in[]) {
 
 
 void relay() {
-  while (true) {
-    // Update display and led
+  // Update display and led
+  auto updateDisplay = [&](){
     if (relayOn) {
       refreshDisplay("Relay Controller", "Relay: ON");
       ledGREEN();
@@ -314,7 +320,10 @@ void relay() {
       refreshDisplay("Relay Controller", "Relay: OFF");
       ledRED();
     }
+  };
+  updateDisplay();
 
+  while (true) {
     // Get and act upon user input
     int in = input();
     if (in == PRESS) {
@@ -323,6 +332,7 @@ void relay() {
       } else {
         relayON();
       }
+      updateDisplay();
     } else if (in == LEFT) {
       currUI = MENU;
       break;
@@ -331,8 +341,8 @@ void relay() {
 }
 
 void valve() {
-  while (true) {
-    // Update display and led
+  // Update display and led
+  auto updateDisplay = [&](){
     if (valveOpen) {
       refreshDisplay("Valve Controller", "Valve: OPEN");
       ledGREEN();
@@ -340,7 +350,10 @@ void valve() {
       refreshDisplay("Valve Controller", "Valve: CLOSED");
       ledRED();
     }
+  };
+  updateDisplay();
 
+  while (true) {
     // Get and act upon user input
     int in = input();
     if (in == PRESS) {
@@ -349,6 +362,7 @@ void valve() {
       } else {
         valveOPEN();
       }
+      updateDisplay();
     } else if (in == LEFT) {
       currUI = MENU;
       break;
@@ -357,18 +371,24 @@ void valve() {
 }
 
 void reset() {
-  while (true) {
-    // Update display and led
+  // Update display and led
+  auto updateDisplay = [&](){
     refreshDisplay("Reset system?", "Hold to continue");
     ledRED();
+  };
+  updateDisplay();
 
+  while (true) {
     // Get and act upon user input
     int in = input();
     if (in == PRESS) {
       lcd.setCursor(0,1);
       for (int i = 0; i < 16; i++) {
         in = input();
-        if (in == !UNRELEASED) break;
+        if (in == !UNRELEASED) {
+          updateDisplay();
+          break;
+        }
         lcd.write(2);
         delay(50);
         if (i%4 == 0) {
@@ -392,11 +412,19 @@ void reset() {
 }
 
 void info() {
-  while (true) {
-    // Update display and led
-    refreshDisplay(version, company);
+  // Update display and led
+  auto updateDisplay = [&](){
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print(version);
+    lcd.setCursor(0,1);
+    lcd.write(1);
+    lcd.print(company);
     ledOFF();
+  };
+  updateDisplay();
 
+  while (true) {
     // Get and act upon user input
     int in = input();
     if (in == PRESS) {
@@ -406,6 +434,7 @@ void info() {
         delay(50);
         if (i == 15) {
           TakeOnMe();
+          updateDisplay();
         }
       }
     } else if (in == LEFT) {
@@ -526,6 +555,16 @@ void ledOFF() {
   sendBCM("LOF");
 }
 
+void sensorLedOn() {
+  sendBCM("SLN");
+}
+
+void sensorLedOff() {
+ sendBCM("SLF");
+}
+
+
+// Code for Take on Me by A-ha
 #define NOTE_B0  31
 #define NOTE_C1  33
 #define NOTE_CS1 35
@@ -618,6 +657,8 @@ void ledOFF() {
 #define REST      0
 
 void TakeOnMe() {
+  int count = 0;
+
   // change this to make the song slower or faster
   int tempo = 169;
 
@@ -684,7 +725,19 @@ void TakeOnMe() {
     // stop the waveform generation before the next note.
     noTone(buzzer);
 
+    if (count == 0) {
+      link.print("LRD");
+      count++;
+    } else if (count == 1) {
+      link.print("LGN");
+      count++;
+    } else if (count == 2) {
+      link.print("LBL");
+      count = 0;
+    }
+
     // stop playback if joystick is pushed down
     if (input() == DOWN) break;
   }
+  ledOFF();
 }
