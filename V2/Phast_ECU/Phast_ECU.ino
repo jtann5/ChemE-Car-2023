@@ -18,7 +18,7 @@ int const photoPin = A3;
 int const Rx = 12;
 int const Tx = 13;
 
-// Display settings, variables, and characters
+// Display settings, variables, and custom characters
 LiquidCrystal_I2C lcd(0x27,16,2);
 byte copyrightChar[8] = {B11111,B10001,B10101,B10111,B10101,B10001,B11111,B00000};
 byte blockChar[8] = {B11111,B11111,B11111,B11111,B11111,B11111,B11111,B11111};
@@ -27,6 +27,9 @@ byte blockChar[8] = {B11111,B11111,B11111,B11111,B11111,B11111,B11111,B11111};
 enum joystick {NONE, PRESS, LEFT, RIGHT, UP, DOWN, UNRELEASED};
 bool released = true;
 int const dist = 75;
+int const input_delay = 50;
+int input_timer = 0;
+
 
 // UI settings and variables
 enum ui {MENU=-1, REACTION, RELAY, VALVE, RESET, INFO};
@@ -460,29 +463,37 @@ int input() {
   int yValue = analogRead(yPin);
   if (buttonValue == LOW && released) {
     released = false;
+    input_timer = millis();
     return PRESS;
   } else if (xValue < 511-dist && released) {
     released = false;
+    input_timer = millis();
     return LEFT;
   } else if (xValue > 511+dist && released) {
     released = false;
+    input_timer = millis();
     return RIGHT;
   } else if (yValue < 511-dist && released) {
     released = false;
+    input_timer = millis();
     return UP;
   } else if (yValue > 511+dist && released) {
     released = false;
+    input_timer = millis();
     return DOWN;
   } else if (buttonValue == LOW || xValue < 511-dist || xValue > 511+dist || yValue < 511-dist || yValue > 511+dist) {
     released = false;
+    input_timer = millis();
     return UNRELEASED;
+  } else if (millis() - input_timer <= input_delay) {
+    return NONE;
   } else {
     released = true;
     return NONE;
   }
 }
 
-// Functions for interaction with hardware
+// ******************** Functions for interaction with hardware below ********************
 void refreshDisplay(String in1, String in2) {
   lcd.setCursor(0,0);
   if (strlen(in1.c_str()) > 16) {
@@ -545,6 +556,7 @@ void valveCLOSE() {
 void ledRED() {
   sendBCM("LRD");
 }
+
 void ledGREEN() {
   sendBCM("LGN");
 }
@@ -564,7 +576,7 @@ void sensorLedOff() {
 }
 
 
-// Code for Take on Me by A-ha
+// ******************** Code below for Take on Me by A-ha ********************
 #define NOTE_B0  31
 #define NOTE_C1  33
 #define NOTE_CS1 35
