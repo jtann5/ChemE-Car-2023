@@ -4,10 +4,7 @@ const char* company = "TanrTech";
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <SoftwareSerial.h>
-
-// Reaction settings
-int const reactionBaseline = 50;
-int const stopValue = 20;
+#include <EEPROM.h>
 
 // Pin setup
 int const xPin = A0;
@@ -32,13 +29,13 @@ int input_timer = 0;
 
 
 // UI settings and variables
-enum ui {MENU=-1, REACTION, RELAY, VALVE, RESET, INFO};
-const char* options[] = {"Reaction Center", "Relay Control", "Valve Control", "Reset", "Info"};
+enum ui {MENU=-1, REACTION, RELAY, VALVE, RESET, INFO, SETTINGS};
+const char* options[] = {"Reaction Center", "Relay Control", "Valve Control", "Reset", "Info", "Settings"};
 int currUI = MENU;
 bool arrowPos = true; // True: arrow on top False: arrow on bottom
 int selection = REACTION;
 int const minS = REACTION;
-int const maxS = INFO;
+int const maxS = SETTINGS;
 
 // State of relay and valve
 bool relayOn = false;
@@ -52,9 +49,26 @@ byte ch = 0;
 
 void(* sysReset) (void) = 0;
 
-void setup() {
-  Serial.begin(9600);   
+void EEPROMdefaults() {
+  int const defaultReactionType = 0;
+  // Luminol (0)
+  int const defaultThreshold0 = 500;
+  int const defaultStop0= 100;
+  // Iodine (1)
+  int const defaultThreshold1 = 100;
+  int const defaultStop1 = 10;
+  EEPROM.put(0, defaultReactionType);
+  EEPROM.put(2, defaultThreshold0);
+  EEPROM.put(4, defaultStop0);
+  EEPROM.put(6, defaultThreshold1);
+  EEPROM.put(8, defaultStop1);
+}
 
+void setup() {
+  Serial.begin(9600);
+
+  // Set default values for EEPROM if needed
+  if (EEPROM.read(0) == 255) EEPROMdefaults();
   // Initialize joystick
   pinMode(buttonPin, INPUT);
   digitalWrite(buttonPin, HIGH);
@@ -115,6 +129,9 @@ void loop() {
     case INFO:
       info();
       break;
+    case SETTINGS:
+      settings();
+      break;
     default:
       currUI = MENU;
   }
@@ -168,11 +185,24 @@ void menu() {
 }
 
 void reaction() {
+  // Get values from EEPROM
+  int reactionType;
+  int threshold;
+  int stop;
+  EEPROM.get(0, reactionType);
+  if (reactionType == 0) {
+    EEPROM.get(2, threshold);
+    EEPROM.get(4, stop);
+  } else if (reactionType == 1) {
+    EEPROM.get(6, threshold);
+    EEPROM.get(8, stop);
+  }
+
   // Reaction state booleans
   bool reacting = false;
   bool manualStop = false;
   bool reactionComplete = false;
-  bool baselineReached = false;
+  bool thresholdReached = false;
 
   // Sensor settings and variables
   int sensorValue = 0;
@@ -231,16 +261,17 @@ void reaction() {
 
     // Check status of reaction and act accordingly
     if (reacting) {
-      if (baselineReached) {
-        // if (sensorValue <= stopValue) {
+      if (thresholdReached) {
+        // if (sensorValue <= stop) {
         //   relayOFF();
         //   valveCLOSE();
+        //    if (reactionType == 1) sensorLedOff();
         //   reacting = false;
         //   reactionComplete = true;
-        //   baselineReached = false;
+        //   thresholdReached = false;
         // }
       } else {
-        if (sensorValue >= reactionBaseline) baselineReached = true;
+        if (sensorValue >= threshold) thresholdReached = true;
       }
     }
 
@@ -250,20 +281,20 @@ void reaction() {
       if (reacting) {
         reacting = false;
         manualStop = true;
-        baselineReached = false;
+        thresholdReached = false;
         relayOFF();
         valveCLOSE();
-        sensorLedOff();
+        if (reactionType == 1) sensorLedOff();
       } else if (relayOn) {
         relayOFF();
         valveCLOSE();
-        sensorLedOff();
+        if (reactionType == 1) sensorLedOff();
       } else {
         reacting = true;
         manualStop = false;
         relayON();
         valveOPEN();
-        sensorLedOn();
+        if (reactionType == 1) sensorLedOn();
         
         // added for testing
         time = 0.0;
@@ -317,10 +348,10 @@ void relay() {
   // Update display and led
   auto updateDisplay = [&](){
     if (relayOn) {
-      refreshDisplay("Relay Controller", "Relay: ON");
+      refreshDisplay(F("Relay Controller"), F("Relay: ON"));
       ledGREEN();
     } else {
-      refreshDisplay("Relay Controller", "Relay: OFF");
+      refreshDisplay(F("Relay Controller"), F("Relay: OFF"));
       ledRED();
     }
   };
@@ -347,10 +378,10 @@ void valve() {
   // Update display and led
   auto updateDisplay = [&](){
     if (valveOpen) {
-      refreshDisplay("Valve Controller", "Valve: OPEN");
+      refreshDisplay(F("Valve Controller"), F("Valve: OPEN"));
       ledGREEN();
     } else {
-      refreshDisplay("Valve Controller", "Valve: CLOSED");
+      refreshDisplay(F("Valve Controller"), F("Valve: CLOSED"));
       ledRED();
     }
   };
@@ -376,7 +407,7 @@ void valve() {
 void reset() {
   // Update display and led
   auto updateDisplay = [&](){
-    refreshDisplay("Reset system?", "Hold to continue");
+    refreshDisplay(F("Reset system?"), F("Hold to continue"));
     ledRED();
   };
   updateDisplay();
@@ -403,6 +434,7 @@ void reset() {
           sendBCM("RST");
           ledOFF();
           lcd.clear();
+          EEPROMdefaults();
           delay(500);
           sysReset();
         }
@@ -440,6 +472,247 @@ void info() {
           updateDisplay();
         }
       }
+    } else if (in == LEFT) {
+      currUI = MENU;
+      break;
+    }
+  }
+}
+
+void settings() {
+  int reactionType;
+  int threshold;
+  int stop;
+  EEPROM.get(0, reactionType);
+  if (reactionType == 0) {
+    EEPROM.get(2, threshold);
+    EEPROM.get(4, stop);
+  } else if (reactionType == 1) {
+    EEPROM.get(6, threshold);
+    EEPROM.get(8, stop);
+  }
+  // Reaction type
+  // Baseline
+  // Stop value
+  int selection = 0;
+  bool arrowPos = true; // True: arrow on top False: arrow on bottom
+  bool selected = false;
+  bool changed = false;
+  int minS = 0;
+  int maxS = 2;
+  const char* typeNames[] = {"Luminol", "Iodine"};
+
+  auto stringCreate = [&](int val) -> String {
+    if (selected && selection == val) {
+      switch (val) {
+        case 0:
+          return ("TYPE: " + String(typeNames[reactionType]));
+        case 1:
+          return ("THRESHOLD: " + String(threshold));
+        case 2:
+          return ("STOP: " + String(stop));
+      }
+    } else {
+      switch (val) {
+        case 0:
+          return ("Type: " + String(typeNames[reactionType]));
+        case 1:
+          return ("Threshold: " + String(threshold));
+        case 2:
+          return ("Stop: " + String(stop));
+      }
+    }
+  };
+  // Update display and led
+  auto updateDisplay = [&](){
+    if (arrowPos) {
+      refreshDisplay(">"+stringCreate(selection), " "+stringCreate(selection+1));
+    } else {
+      refreshDisplay(" "+stringCreate(selection-1), ">"+stringCreate(selection));
+    }
+  };
+  updateDisplay();
+
+  while (true) {
+    // Get and act upon user input
+    int in = input();
+    if (in == PRESS && !selected) {
+      selected = true;
+      updateDisplay();
+    } else if (in == PRESS && selected) {
+      selected = false;
+      if (changed) {
+        switch (selection) {
+          case 0:
+            EEPROM.put(0, reactionType);
+            if (reactionType == 0) {
+              EEPROM.get(2, threshold);
+              EEPROM.get(4, stop);
+            } else if (reactionType == 1) {
+              EEPROM.get(6, threshold);
+              EEPROM.get(8, stop);
+            }
+            break;
+          case 1:
+            if (reactionType == 0) {
+              EEPROM.put(2, threshold);
+            } else if (reactionType == 1) {
+              EEPROM.put(6, threshold);
+            }
+            break;
+          case 2:
+            if (reactionType == 0) {
+              EEPROM.put(4, stop);
+            } else if (reactionType == 1) {
+              EEPROM.put(8, stop);
+            }
+            break;
+        }
+      }
+      updateDisplay();
+    } else if (in == UP && !selected) {
+      if (selection == minS) {
+        lcd.setCursor(0,0);
+        for (int i = 0; i < 16; i++) lcd.write(2);
+        delay(100);
+      } else if (arrowPos) {
+        selection--;
+      } else {
+        selection--;
+        arrowPos = true;
+      }
+      updateDisplay();
+    } else if (in == DOWN && !selected) {
+      if (selection == maxS) { // end of menu
+        lcd.setCursor(0,1);
+        for (int i = 0; i < 16; i++) lcd.write(2);
+        delay(100);
+      } else if (arrowPos) {
+        selection++;
+        arrowPos = false;
+      } else {
+        selection++;
+      }
+      updateDisplay();
+    } else if (in == UP && selected) {
+      changed = true;
+      switch (selection) {
+        case 0:
+          if (reactionType == 1) {
+            reactionType = 0;
+          } else {
+            reactionType++;
+          }
+          break;
+        case 1:
+          if (threshold == 1000) {
+            threshold = 0;
+          } else {
+            threshold++;
+            updateDisplay();
+            delay(400);
+            int sub = 1;
+            int passes = 1;
+            while (true) {
+              in = input();
+              if (in == !UNRELEASED) {
+                break;
+              } else if ((threshold + sub) >= 1000) {
+                threshold = 1000;
+                break;
+              }
+              threshold+=sub;
+              passes++;
+              updateDisplay();
+              if (passes%5 == 0) sub++;
+            }
+          }
+          break;
+        case 2:
+          if (stop == 1000) {
+            stop = 0;
+          } else {
+            stop++;
+            updateDisplay();
+            delay(400);
+            int sub = 1;
+            int passes = 1;
+            while (true) {
+              in = input();
+              if (in == !UNRELEASED)  {
+                break;
+              } else if ((stop + sub) >= 1000) {
+                stop = 1000;
+              }
+              stop+=sub;
+              passes++;
+              updateDisplay();
+              if (passes%5 == 0) sub++;
+            }
+          }
+          break;
+      }
+      updateDisplay();
+    } else if (in == DOWN && selected) {
+      changed = true;
+      switch (selection) {
+        case 0:
+          if (reactionType == 0) {
+            reactionType = 1;
+          } else {
+            reactionType--;
+          }
+          break;
+        case 1:
+          if (threshold == 0) {
+            threshold = 1000;
+          } else {
+            threshold--;
+            updateDisplay();
+            delay(400);
+            int sub = 1;
+            int passes = 1;
+            while (true) {
+              in = input();
+              if (in == !UNRELEASED) {
+                break;
+              } else if ((threshold - sub) <= 0) {
+                threshold = 0;
+                break;
+              }
+              threshold-=sub;
+              passes++;
+              updateDisplay();
+              if (passes%5 == 0) sub++;
+            }
+          }
+          break;
+        case 2:
+          if (stop == 0) {
+            stop = 1000;
+          } else {
+            stop--;
+            updateDisplay();
+            delay(400);
+            int sub = 1;
+            int passes = 1;
+            while (true) {
+              in = input();
+              if (in == !UNRELEASED) {
+                break;
+              } else if ((stop - sub) <= 0) {
+                stop = 0;
+                break;
+              }
+              stop-=sub;
+              passes++;
+              updateDisplay();
+              if (passes%5 == 0) sub++;
+            }
+          }
+          break;
+      }
+      updateDisplay();
     } else if (in == LEFT) {
       currUI = MENU;
       break;
@@ -521,7 +794,7 @@ String sendBCM(String send) {
     unsigned long curr = millis();
     // Sends message every 250ms and times out at 1000ms
     if (curr - prev >= 1000UL) {
-      error("BCM ERROR", "No response");
+      error(F("BCM ERROR"), F("No response"));
     } else if ((curr-prev)%250UL == 0){
       link.print(send);
     }
