@@ -52,8 +52,8 @@ void(* sysReset) (void) = 0;
 void EEPROMdefaults() {
   int const defaultReactionType = 0;
   // Luminol (0)
-  int const defaultThreshold0 = 500;
-  int const defaultStop0= 100;
+  int const defaultThreshold0 = 50;
+  int const defaultStop0= 20;
   // Iodine (1)
   int const defaultThreshold1 = 100;
   int const defaultStop1 = 10;
@@ -262,14 +262,14 @@ void reaction() {
     // Check status of reaction and act accordingly
     if (reacting) {
       if (thresholdReached) {
-        // if (sensorValue <= stop) {
-        //   relayOFF();
-        //   valveCLOSE();
-        //    if (reactionType == 1) sensorLedOff();
-        //   reacting = false;
-        //   reactionComplete = true;
-        //   thresholdReached = false;
-        // }
+        if (sensorValue <= stop) {
+          relayOFF();
+          valveCLOSE();
+          if (reactionType == 1) sensorLedOff();
+          reacting = false;
+          reactionComplete = true;
+          thresholdReached = false;
+        }
       } else {
         if (sensorValue >= threshold) thresholdReached = true;
       }

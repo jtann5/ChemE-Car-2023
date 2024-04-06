@@ -2,6 +2,7 @@ const char* version = "Phast v2.0.0";
 const char* company = "TanrTech";
 
 #include <AFMotor.h>
+#include <Servo.h>
 #include <SoftwareSerial.h>
 
 // Pin setup
@@ -12,10 +13,16 @@ int const Bled = A3;
 int const Rx = A4;
 int const Tx = A5;
 
+// Servo motor setup
+Servo valve;
+int const servoPin = 9;
+#define OPEN 1100
+#define CLOSE 2000
+
 // Motor controller setup
-AF_DCMotor valve(4);
-#define OPEN BACKWARD
-#define CLOSE FORWARD
+AF_DCMotor valve2(4);
+#define OPEN2 BACKWARD
+#define CLOSE2 FORWARD
 
 // Sensor led setup
 AF_DCMotor sensorLed(3);
@@ -43,9 +50,13 @@ void setup() {
   pinMode(relayPin, OUTPUT);
   relayOFF();
 
-  // Initialize valve
-  valve.setSpeed(255);
+  // Initialize servo valve
+  valve.attach(servoPin);
   valveCLOSE();
+
+  // Initialize valve
+  valve2.setSpeed(255);
+  valveCLOSE2();
 
   // Initialize Sensor LED
   sensorLed.setSpeed(255);
@@ -79,15 +90,23 @@ void relayON() {
 }
 
 void valveCLOSE() {
-  valve.run(CLOSE);
-  delay(30);
-  valve.run(RELEASE);
+  valve.write(CLOSE);
 }
 
 void valveOPEN() {
-  valve.run(OPEN);
+  valve.write(OPEN);
+}
+
+void valveCLOSE2() {
+  valve2.run(CLOSE2);
   delay(30);
-  valve.run(RELEASE);
+  valve2.run(RELEASE);
+}
+
+void valveOPEN2() {
+  valve2.run(OPEN2);
+  delay(30);
+  valve2.run(RELEASE);
 }
 
 void ledRED() {
